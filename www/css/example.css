@@ -1,0 +1,62 @@
+/* Basic styling for the entire body */
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background: #f4f4f4;
+    color: #333;
+}
+
+/* Header styles */
+header {
+    background: #333;
+    color: #fff;
+    padding: 10px 20px;
+    text-align: center;
+}
+
+header nav ul {
+    list-style: none;
+    padding: 0;
+}
+
+header nav ul li {
+    display: inline;
+    margin-right: 10px;
+}
+
+/* Styling for links */
+a {
+    color: rgb(255, 0, 0);
+    text-decoration: underline;
+}
+
+/* Main content area */
+main {
+    padding: 20px;
+    margin-top: 10px;
+    background: white;
+    clear: both;
+}
+
+/* Footer styling */
+footer {
+    text-align: center;
+    padding: 10px 20px;
+    background: #333;
+    color: white;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+}
+
+/* CSS for the image */
+img {
+    width: 50%; /* Make the image fill its container horizontally */
+    height: auto; /* Maintain aspect ratio */
+    display: block; /* Display as a block-level element */
+    margin: 0 auto; /* Center the image horizontally */
+    /* Apply shadow to the image */
+    box-shadow: 10px 10px 10px rgba(0, 0, 0, 0.5); /* horizontal-offset vertical-offset blur-radius color */
+}
