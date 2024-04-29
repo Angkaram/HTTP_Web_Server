@@ -13,13 +13,90 @@
 #define MAX_PENDING 5
 #define FILE_NOT_FOUND "404.html"
 #define DEFAULT_FILE "index.html"
+#define PORT 8080
+#define MAX_REQUEST_SIZE 16384
 
-int main(int argc, char *argv[]) {
-    int port = SERVER_PORT;
-    if (argc > 1) {
-        port = atoi(argv[1]);
+void handle_cgi_request(int client_sock, const char* script_path, const char* post_data);
+
+int main() {
+    int server_sock, client_sock;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len = sizeof(client_addr);
+
+    // Create socket
+    server_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_sock < 0) {
+        perror("Error in socket creation");
+        exit(EXIT_FAILURE);
     }
-    start_server(port);
+
+    // Initialize server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind socket to address
+    if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Error in binding");
+        exit(EXIT_FAILURE);
+    }
+
+    // Listen for connections
+    if (listen(server_sock, 5) < 0) {
+        perror("Error in listening");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Server listening on port %d...\n", PORT);
+
+    while (1) {
+        // Accept incoming connection
+        client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_len);
+        if (client_sock < 0) {
+            perror("Error in accepting connection");
+            continue;
+        }
+
+        printf("Client connected: %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+        // Read request
+        char request[MAX_REQUEST_SIZE];
+        ssize_t bytes_read = recv(client_sock, request, sizeof(request), 0);
+        if (bytes_read < 0) {
+            perror("Error reading from socket");
+            close(client_sock);
+            continue;
+        }
+
+        // Extract method and path from request
+        char method[16], path[1024];
+        sscanf(request, "%s %s", method, path);
+
+        // Handle GET or POST request
+        if (strcmp(method, "GET") == 0) {
+            handle_get_request(client_sock, path);
+        } else if (strcmp(method, "POST") == 0) {
+            // Extract POST data (if any)
+            char* content_length_ptr = strstr(request, "Content-Length: ");
+            int content_length = atoi(content_length_ptr + 16);
+            char post_data[content_length + 1];
+            strncpy(post_data, content_length_ptr + 16, content_length);
+            post_data[content_length] = '\0';
+            
+            handle_post_request(client_sock, path);
+        } else {
+            // Unsupported method
+            send_response(client_sock, "HTTP/1.1 501 Not Implemented\r\n", "text/html", "<html><body><h1>501 Not Implemented</h1></body></html>", 51);
+        }
+
+        // Close client socket
+        close(client_sock);
+        printf("Client disconnected: %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+    }
+
+    // Close server socket
+    close(server_sock);
+
     return 0;
 }
 
@@ -170,6 +247,66 @@ void handle_get_request(int client_sock, const char* path) {
     close(file_fd);
 }
 
+void handle_post_request(int client_sock, const char* path) {
+    // Read the POST data from the client socket
+    char post_data[MAX_REQUEST_SIZE];
+    ssize_t bytes_read = recv(client_sock, post_data, sizeof(post_data), 0);
+    if (bytes_read < 0) {
+        perror("Error reading POST data");
+        close(client_sock);
+        return;
+    }
+
+    // Extract POST data (if any)
+    char* content_length_ptr = strstr(post_data, "Content-Length: ");
+    if (content_length_ptr == NULL) {
+        send_response(client_sock, "HTTP/1.1 400 Bad Request\r\n", "text/html", "<html><body><h1>400 Bad Request</h1></body></html>", 58);
+        return;
+    }
+    int content_length = atoi(content_length_ptr + 16);
+    char post_content[content_length + 1];
+    strncpy(post_content, content_length_ptr + 16, content_length);
+    post_content[content_length] = '\0';
+
+    // Handle POST request based on path
+    if (strcmp(path, "/login.cgi") == 0) {
+        // Handle login request
+        handle_cgi_request(client_sock, "cgi-bin/login.cgi", post_content);
+    } else if (strcmp(path, "/submitblog.cgi") == 0) {
+        // Handle blog submission request
+        handle_cgi_request(client_sock, "cgi-bin/submitblog.cgi", post_content);
+    } else {
+        // Unsupported POST request
+        send_response(client_sock, "HTTP/1.1 404 Not Found\r\n", "text/html", "<html><body><h1>404 Not Found</h1></body></html>", 58);
+    }
+}
+
+void handle_cgi_request(int client_sock, const char* script_path, const char* post_data) {
+    // Set up environment variables
+    setenv("REQUEST_METHOD", "POST", 1);
+
+    char content_length_str[32];
+    sprintf(content_length_str, "%lu", strlen(post_data));
+    setenv("CONTENT_LENGTH", content_length_str, 1);
+
+    // Fork a child process
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("Error forking process");
+        send_response(client_sock, "HTTP/1.1 500 Internal Server Error\r\n", "text/html", "<html><body><h1>500 Internal Server Error</h1></body></html>", 59);
+        return;
+    } else if (pid == 0) {
+        // Child process: execute CGI script
+        dup2(client_sock, STDOUT_FILENO); // Redirect stdout to client socket
+        execl(script_path, script_path, NULL); // Execute CGI script
+        perror("Error executing CGI script");
+        exit(EXIT_FAILURE);
+    } else {
+        // Parent process: wait for child to finish
+        wait(NULL);
+    }
+}
+
 void handle_head_request(int client_sock, const char* path) {
     // Implementation for handling HEAD requests
     char filepath[1024] = "www";
@@ -200,19 +337,18 @@ void handle_head_request(int client_sock, const char* path) {
     close(file_fd);
 }
 
-void handle_post_request(int client_sock, const char* path) {
-    // Handle POST request logic here
-    // Currently not implemented, sending 405 Method Not Allowed
-    send_response(client_sock, "HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD, POST\r\n\r\n", "text/html", "", 0);
-}
-
 void send_response(int client_sock, const char *header, const char *content_type, const char *body, int body_length) {
-    char response[BUFFER_SIZE];
-    sprintf(response, "%sContent-Type: %s\r\nContent-Length: %d\r\n\r\n%s", header, content_type, body_length, body);
-    send(client_sock, response, strlen(response), 0);
-    if (body_length > 0 && body != NULL) {
-        send(client_sock, body, body_length, 0); // Send the body separately for binary data and textual data
-    }
+  // Send HTTP response headers
+    send(client_sock, header, strlen(header), 0);
+    send(client_sock, "Content-Type: ", 14, 0);
+    send(client_sock, content_type, strlen(content_type), 0);
+    send(client_sock, "\r\n", 2, 0);
+    send(client_sock, "Content-Length: ", 16, 0);
+    dprintf(client_sock, "%d", body_length);
+    send(client_sock, "\r\n\r\n", 4, 0);
+
+    // Send response content
+    send(client_sock, body, body_length, 0);
 }
 
 const char* get_mime_type(const char *filename) {
