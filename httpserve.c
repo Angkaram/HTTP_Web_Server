@@ -163,9 +163,7 @@ void handle_get_request(int client_sock, const char* path) {
         return;
     }
 
-    struct stat file_stat;
     fstat(file_fd, &file_stat);
-    char *file_buffer = malloc(file_stat.st_size);
     read(file_fd, file_buffer, file_stat.st_size);
     send_response(client_sock, "HTTP/1.1 200 OK\r\n", mime_type, file_buffer, file_stat.st_size);
     free(file_buffer);
@@ -197,7 +195,6 @@ void handle_head_request(int client_sock, const char* path) {
         return;
     }
 
-    struct stat file_stat;
     fstat(file_fd, &file_stat);
     send_response(client_sock, "HTTP/1.1 200 OK\r\n", mime_type, "", 0);
     close(file_fd);
