@@ -118,14 +118,26 @@ void process_request(int client_sock) {
         handle_get_request(client_sock, path);
     } else if (strcmp(method, "HEAD") == 0) {
         handle_head_request(client_sock, path);
-    } else {
-        // Handle other methods or send an appropriate error response
-        send_response(client_sock, "HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD\r\n\r\n", "text/html", "", 0);
-    }
-
-    // Handle POST Requests
-    if (strcmp(method, "POST") == 0) {
-        if (strcmp(path, "cgi-bin/login.c") == 0 || strcmp(path, "cgi-bin/submitblog.c") == 0) {
+    } else if (strcmp(method, "POST") == 0) {
+        // Extract post data from the request buffer
+        char* post_data_start = strstr(buffer, "\r\n\r\n");
+        if (post_data_start == NULL) {
+            // If post data is not found, respond with 400 Bad Request
+            send_response(client_sock, "HTTP/1.1 400 Bad Request\r\n", "text/html", "<html><body><h1>400 Bad Request</h1></body></html>", 58);
+            return;
+        }
+        char* post_data = post_data_start + 4; // Move past "\r\n\r\n"
+        
+        // Check if the request path matches the CGI script paths
+        if (strcmp(path, "www/cgi-bin/login.cgi") == 0 || strcmp(path, "www/cgi-bin/submitblog.cgi") == 0) {
+            // Set the appropriate MIME type for CGI script response
+            send_response(client_sock, "HTTP/1.1 200 OK\r\n", "text/html", "", 0);
+            
+            // Handle CGI request
+            handle_cgi_request(client_sock, path, post_data);
+            return; // Ensure no further processing for CGI scripts
+        } else {
+            // Handle POST requests that are not CGI scripts
             handle_post_request(client_sock, path);
             return; // Ensure no further processing for POST requests
         }

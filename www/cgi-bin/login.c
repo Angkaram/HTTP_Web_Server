@@ -8,7 +8,7 @@ int main(void) {
     // Retrieve the content length
     char *contentLength = getenv("CONTENT_LENGTH");
     if (!contentLength) {
-        printf("<html><body>Error: CONTENT_LENGTH not set.</body></html>");
+        printf("<html><body>Error: CONTENT_LENGTH not set or invalid.</body></html>");
         return 1;
     }
 
@@ -40,9 +40,8 @@ int main(void) {
 
     // Authenticate user
     if (strcmp(username, expectedUsername) == 0 && strcmp(password, expectedPassword) == 0) {
-        // Generate session ID and set cookie
-        // Redirect to index.html
-        printf("Location: index.html\r\n");
+        printf("HTTP/1.1 302 Found\r\n");
+        printf("Location: /index.html\r\n");
         printf("Set-Cookie: sessionID=%s; HttpOnly\r\n\r\n", "generated_session_id");
     } else {
         // Display error message (authentication failed)

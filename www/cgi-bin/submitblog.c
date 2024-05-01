@@ -8,7 +8,7 @@ int main(void) {
     // Retrieve the content length
     char *contentLength = getenv("CONTENT_LENGTH");
     if (!contentLength) {
-        printf("<html><body>Error: CONTENT_LENGTH not set.</body></html>");
+        printf("<html><body>Error: CONTENT_LENGTH not set or invalid.</body></html>");
         return 1;
     }
 
@@ -47,7 +47,8 @@ int main(void) {
     fclose(file);
 
     // Redirect to index.html
-    printf("Location: index.html\r\n\r\n");
+    printf("HTTP/1.1 302 Found\r\n");
+    printf("Location: /index.html\r\n\r\n");
 
     // Free allocated memory
     free(postData);
