@@ -3,30 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to My Server</title>
-    <link rel="stylesheet" href="css/example.css">
+    <title>Simple Blog</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #userStatus, #blogButtonContainer {
+            margin: 20px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #posts {
+            width: 80%;
+            max-width: 500px;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 14px 20px;
+            margin: 8px 0;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover {
+            opacity: 0.8;
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <h1>Angelo's HTTP Website</h1>
-        <nav>
-            <ul>
-                <li><a href="page1.html">Black Hole Page</a></li>
-                <li><a href="javascript:console.log('Clicked the link!')">Click me for a console log</a></li>
-            </ul>
-        </nav>
-    </header>
-    <main>
-        <section>
-            <h2>Description:</h2>
-            <p>Simple web server running from a custom HTTP server. Written in C.</p>
-            <p>This server can handle HTTP GET requests and serve HTML, CSS, and JS files.</p>
-            <p>Click any of the red buttons above to navigate to a different URL or for a console log using JS.</p>
-            <p><img src="https://th.bing.com/th/id/R.1429c6263c36a83aa74bf052788a16bb?rik=GNSlfVGEzMAE6w&riu=http%3a%2f%2fgetwallpapers.com%2fwallpaper%2ffull%2f9%2fb%2f7%2f388858.jpg&ehk=SwaZfJAJOc0UPbVg2nJWwhLuhvOLFys4R3Qkfe4oh0U%3d&risl=&pid=ImgRaw&r=0"
-            alt="The black hole from the movie Interstellar" /></p>
-            <p><img src="images/blackHole.jpg" alt="Another image of a black hole"/></p>
-        </section>
-    </main>
-    <script src="js/scripts.js"></script>
+    <h1>Welcome to Our Blog</h1>
+    <div id="userStatus">
+        <!-- This button will be dynamically changed by JavaScript based on the session status -->
+        <button id="loginButton" onclick="handleLoginLogout()">Login</button>
+    </div>
+    <div id="posts">
+        <iframe src="posts.html" style="width: 100%; height: 500px; border: none;"></iframe>
+    </div>
+    <div id="blogButtonContainer">
+        <!-- Blog post button will be inserted here if logged in -->
+    </div>
+    
+
+    <script>
+        function handleLoginLogout() {
+            const loggedIn = getCookie("session_id");
+            if (loggedIn) {
+                document.cookie = "session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                window.location.reload();  // Reload the page to update state
+            } else {
+                window.location.href = '/login.html';
+            }
+        }
+
+        window.onload = () => {
+            const loggedIn = getCookie("session_id");
+            const loginButton = document.getElementById('loginButton');
+            const blogButtonContainer = document.getElementById('blogButtonContainer');
+
+            if (loggedIn) {
+                loginButton.textContent = 'Logout';
+                loginButton.onclick = handleLoginLogout;
+                loginButton.insertAdjacentHTML('beforebegin', '<p>Logged in as: admin</p>');
+
+                // Add the blog post button
+                blogButtonContainer.style.display = 'block';  // Make the container visible again when logged in
+                const blogButton = document.createElement('button');
+                blogButton.textContent = 'Add Blog Post';
+                blogButton.onclick = () => { window.location.href = '/blogentry.html'; };
+                blogButtonContainer.appendChild(blogButton);
+            } else {
+                loginButton.textContent = 'Login';
+                loginButton.onclick = function() { window.location.href = '/login.html'; };
+                blogButtonContainer.innerHTML = '';  // Clear any buttons if logged out
+                blogButtonContainer.style.display = 'none';  // Hide the container
+            }
+        };
+
+        function getCookie(name) {
+            let cookieArray = document.cookie.split(';');
+            for(let i = 0; i < cookieArray.length; i++) {
+                let cookiePair = cookieArray[i].split('=');
+                if(name == cookiePair[0].trim()) {
+                    return cookiePair[1];
+                }
+            }
+            return null;
+        }
+    </script>
 </body>
 </html>

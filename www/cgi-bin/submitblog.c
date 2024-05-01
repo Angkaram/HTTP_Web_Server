@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define POSTS_FILE "posts.html"
-
 int main(void) {
     printf("Content-type: text/html\n\n");
 
@@ -14,37 +12,45 @@ int main(void) {
         return 1;
     }
 
-    // Allocate memory for POST data
+    // Convert content length to integer
     int len = atoi(contentLength);
+    if (len <= 0) {
+        printf("<html><body>Error: Invalid CONTENT_LENGTH value.</body></html>");
+        return 1;
+    }
+
+    // Allocate memory for POST data
     char *postData = (char *)malloc(len + 1);
     if (!postData) {
         printf("<html><body>Error: Memory allocation failed.</body></html>");
         return 1;
     }
 
-    // Read POST data
+    // Read POST data from stdin
     fread(postData, 1, len, stdin);
     postData[len] = '\0';
 
-    // Extract title and content from POST data
-    char title[256], content[1024];
-    sscanf(postData, "title=%[^&]&content=%s", title, content);
+    // Parse POST data to extract title and content
+    char *title = strtok(postData, "&");
+    char *content = strtok(NULL, "&");
 
-    // Open posts file for appending
-    FILE *file = fopen(POSTS_FILE, "a");
+    // Open posts.html for appending
+    FILE *file = fopen("posts.html", "a");
     if (!file) {
-        printf("<html><body>Error: Failed to open posts file.</body></html>");
+        printf("<html><body>Error: Unable to open posts.html.</body></html>");
         free(postData);
         return 1;
     }
 
-    // Write new blog post to file
+    // Write the blog post data to the file
     fprintf(file, "<div><h2>%s</h2><p>%s</p></div>\n", title, content);
     fclose(file);
 
     // Redirect to index.html
-    printf("Location: /index.html\n\n");
+    printf("Location: index.html\r\n\r\n");
 
+    // Free allocated memory
     free(postData);
+
     return 0;
 }

@@ -8,95 +8,25 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "httpserve.h"
+#include <sys/wait.h>
 
 #define MAX_PENDING 5
-#define FILE_NOT_FOUND "404.html"
-#define DEFAULT_FILE "index.html"
+#define BUFFER_SIZE 1024
 #define PORT 8080
-#define MAX_REQUEST_SIZE 16384
 
+void start_server(int port);
+int create_socket(int port);
+void handle_connections(int server_sock);
+void process_request(int client_sock);
+void handle_get_request(int client_sock, const char* path);
+void handle_post_request(int client_sock, const char* path);
 void handle_cgi_request(int client_sock, const char* script_path, const char* post_data);
+void handle_head_request(int client_sock, const char* path);
+void send_response(int client_sock, const char *header, const char *content_type, const char *body, int body_length);
+const char* get_mime_type(const char *filename);
 
 int main() {
-    int server_sock, client_sock;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t client_len = sizeof(client_addr);
-
-    // Create socket
-    server_sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_sock < 0) {
-        perror("Error in socket creation");
-        exit(EXIT_FAILURE);
-    }
-
-    // Initialize server address
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(PORT);
-
-    // Bind socket to address
-    if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Error in binding");
-        exit(EXIT_FAILURE);
-    }
-
-    // Listen for connections
-    if (listen(server_sock, 5) < 0) {
-        perror("Error in listening");
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Server listening on port %d...\n", PORT);
-
-    while (1) {
-        // Accept incoming connection
-        client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_len);
-        if (client_sock < 0) {
-            perror("Error in accepting connection");
-            continue;
-        }
-
-        printf("Client connected: %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-
-        // Read request
-        char request[MAX_REQUEST_SIZE];
-        ssize_t bytes_read = recv(client_sock, request, sizeof(request), 0);
-        if (bytes_read < 0) {
-            perror("Error reading from socket");
-            close(client_sock);
-            continue;
-        }
-
-        // Extract method and path from request
-        char method[16], path[1024];
-        sscanf(request, "%s %s", method, path);
-
-        // Handle GET or POST request
-        if (strcmp(method, "GET") == 0) {
-            handle_get_request(client_sock, path);
-        } else if (strcmp(method, "POST") == 0) {
-            // Extract POST data (if any)
-            char* content_length_ptr = strstr(request, "Content-Length: ");
-            int content_length = atoi(content_length_ptr + 16);
-            char post_data[content_length + 1];
-            strncpy(post_data, content_length_ptr + 16, content_length);
-            post_data[content_length] = '\0';
-            
-            handle_post_request(client_sock, path);
-        } else {
-            // Unsupported method
-            send_response(client_sock, "HTTP/1.1 501 Not Implemented\r\n", "text/html", "<html><body><h1>501 Not Implemented</h1></body></html>", 51);
-        }
-
-        // Close client socket
-        close(client_sock);
-        printf("Client disconnected: %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-    }
-
-    // Close server socket
-    close(server_sock);
-
+    start_server(PORT);
     return 0;
 }
 
@@ -104,7 +34,7 @@ void start_server(int port) {
     int server_sock = create_socket(port);
     if (server_sock < 0) {
         perror("Failed to create socket");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     printf("Server started on port %d\n", port);
@@ -193,6 +123,13 @@ void process_request(int client_sock) {
         send_response(client_sock, "HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD\r\n\r\n", "text/html", "", 0);
     }
 
+    // Handle POST Requests
+    if (strcmp(method, "POST") == 0) {
+        if (strcmp(path, "cgi-bin/login.c") == 0 || strcmp(path, "cgi-bin/submitblog.c") == 0) {
+            handle_post_request(client_sock, path);
+            return; // Ensure no further processing for POST requests
+        }
+    }
 }
 
 void handle_get_request(int client_sock, const char* path) {
@@ -240,48 +177,27 @@ void handle_get_request(int client_sock, const char* path) {
         return;
     }
 
-    fstat(file_fd, &file_stat);
-    read(file_fd, file_buffer, file_stat.st_size);
     send_response(client_sock, "HTTP/1.1 200 OK\r\n", mime_type, file_buffer, file_stat.st_size);
     free(file_buffer);
     close(file_fd);
 }
 
 void handle_post_request(int client_sock, const char* path) {
-    // Read the POST data from the client socket
-    char post_data[MAX_REQUEST_SIZE];
-    ssize_t bytes_read = recv(client_sock, post_data, sizeof(post_data), 0);
-    if (bytes_read < 0) {
+    // Implementation for handling POST requests
+    char post_data[MAX_PENDING];
+    ssize_t bytes_received = recv(client_sock, post_data, sizeof(post_data), 0);
+    if (bytes_received <= 0) {
         perror("Error reading POST data");
         close(client_sock);
         return;
     }
+    post_data[bytes_received] = '\0'; // Null-terminate the string
 
-    // Extract POST data (if any)
-    char* content_length_ptr = strstr(post_data, "Content-Length: ");
-    if (content_length_ptr == NULL) {
-        send_response(client_sock, "HTTP/1.1 400 Bad Request\r\n", "text/html", "<html><body><h1>400 Bad Request</h1></body></html>", 58);
-        return;
-    }
-    int content_length = atoi(content_length_ptr + 16);
-    char post_content[content_length + 1];
-    strncpy(post_content, content_length_ptr + 16, content_length);
-    post_content[content_length] = '\0';
-
-    // Handle POST request based on path
-    if (strcmp(path, "/login.cgi") == 0) {
-        // Handle login request
-        handle_cgi_request(client_sock, "cgi-bin/login.cgi", post_content);
-    } else if (strcmp(path, "/submitblog.cgi") == 0) {
-        // Handle blog submission request
-        handle_cgi_request(client_sock, "cgi-bin/submitblog.cgi", post_content);
-    } else {
-        // Unsupported POST request
-        send_response(client_sock, "HTTP/1.1 404 Not Found\r\n", "text/html", "<html><body><h1>404 Not Found</h1></body></html>", 58);
-    }
+    handle_cgi_request(client_sock, path, post_data);
 }
 
 void handle_cgi_request(int client_sock, const char* script_path, const char* post_data) {
+    // Implementation for handling CGI requests
     // Set up environment variables
     setenv("REQUEST_METHOD", "POST", 1);
 
@@ -324,21 +240,12 @@ void handle_head_request(int client_sock, const char* path) {
         return;
     }
 
-    struct stat file_stat;
-    if (fstat(file_fd, &file_stat) < 0) {
-        perror("Server Error: Failed to obtain file information");
-        send_response(client_sock, "HTTP/1.1 500 Internal Server Error\r\n", "text/html", "<html><body><h1>500 Internal Server Error</h1></body></html>", 59);
-        close(file_fd);
-        return;
-    }
-
-    fstat(file_fd, &file_stat);
     send_response(client_sock, "HTTP/1.1 200 OK\r\n", mime_type, "", 0);
     close(file_fd);
 }
 
 void send_response(int client_sock, const char *header, const char *content_type, const char *body, int body_length) {
-  // Send HTTP response headers
+    // Send HTTP response headers
     send(client_sock, header, strlen(header), 0);
     send(client_sock, "Content-Type: ", 14, 0);
     send(client_sock, content_type, strlen(content_type), 0);
@@ -352,6 +259,7 @@ void send_response(int client_sock, const char *header, const char *content_type
 }
 
 const char* get_mime_type(const char *filename) {
+    // Implementation for determining MIME type based on file extension
     if (strstr(filename, ".html")) return "text/html";
     if (strstr(filename, ".css")) return "text/css";
     if (strstr(filename, ".js")) return "application/javascript";
