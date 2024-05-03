@@ -5,53 +5,53 @@
 int main(void) {
     printf("Content-type: text/html\n\n");
 
-    // Retrieve the content length
-    char *contentLength = getenv("CONTENT_LENGTH");
-    if (!contentLength) {
+    // Retrieve the content/body length from the environment variable
+    char *body_length = getenv("CONTENT_LENGTH");
+    if (!body_length) {
         printf("<html><body>Error: CONTENT_LENGTH not set or invalid.</body></html>");
         return 1;
     }
 
-    // Convert content length to integer
-    int len = atoi(contentLength);
+    // convert the body length to integer
+    int len = atoi(body_length);
     if (len <= 0) {
         printf("<html><body>Error: Invalid CONTENT_LENGTH value.</body></html>");
         return 1;
     }
 
-    // Allocate memory for POST data
-    char *postData = (char *)malloc(len + 1);
-    if (!postData) {
+    // allocate memory for POST with malloc
+    char *post_data = (char *)malloc(len + 1);
+    if (!post_data) {
         printf("<html><body>Error: Memory allocation failed.</body></html>");
         return 1;
     }
 
-    // Read POST data from stdin
-    fread(postData, 1, len, stdin);
-    postData[len] = '\0';
+    // POST data in stdin read in
+    fread(post_data, 1, len, stdin);
+    post_data[len] = '\0';
 
-    // Parse POST data to extract title and content
-    char *title = strtok(postData, "&");
+    // PARSING DONE HERE: parse the POST data here to extract the title and body
+    char *title = strtok(post_data, "&");
     char *content = strtok(NULL, "&");
 
-    // Open posts.html for appending
+    // open posts.html to do appending
     FILE *file = fopen("posts.html", "a");
     if (!file) {
         printf("<html><body>Error: Unable to open posts.html.</body></html>");
-        free(postData);
+        free(post_data);
         return 1;
     }
 
-    // Write the blog post data to the file
+    // can write the blog post data to the file now
     fprintf(file, "<div><h2>%s</h2><p>%s</p></div>\n", title, content);
     fclose(file);
 
-    // Redirect to index.html
+    // then once done, redirectd to index.html
     printf("HTTP/1.1 302 Found\r\n");
     printf("Location: /index.html\r\n\r\n");
 
-    // Free allocated memory
-    free(postData);
+    // free memory 
+    free(post_data);
 
     return 0;
 }
