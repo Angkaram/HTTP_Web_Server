@@ -3,7 +3,6 @@
 #include <string.h>
 
 int main(void) {
-    printf("Content-type: text/html\n");
 
     // Retrieve the content length from the environment variable
     char *len_str = getenv("CONTENT_LENGTH");
@@ -34,7 +33,6 @@ int main(void) {
     // Output the HTTP response
     printf("HTTP/1.1 200 OK\n\n");
     printf("<html><body>You provided: %s</body></html>", data);
-
     free(data);
     return 0;
 }
